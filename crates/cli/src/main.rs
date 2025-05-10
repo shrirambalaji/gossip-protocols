@@ -1,28 +1,18 @@
-// Mock UI demo for Gossip visualization (no real protocol yet)
-// -----------------------------------------------------------
-// This standalone CLI shows an animated ring of nodes gradually
-// turning red to simulate rumor spread. All network / protocol
-// logic is stubbed out — replace the mock generator with real
-// `gossip_core` events later.
-// -----------------------------------------------------------
-
 use std::collections::HashSet;
 use std::io;
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use clap::Parser;
 use crossterm::event::{self, Event as CEvent, KeyCode};
-use rand::{seq::SliceRandom, thread_rng};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+use rand::seq::SliceRandom;
+use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 use ratatui::widgets::canvas::Canvas;
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
+use ratatui::widgets::{Block, Borders, Gauge};
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-// ---- Mock event type ---------------------------------------------------------
 #[derive(Debug, Clone)]
 enum GossipEvent {
     RumorReceived { node_id: String },
@@ -30,24 +20,23 @@ enum GossipEvent {
 
 #[derive(Parser, Debug)]
 struct Opts {
-    /// Comma‑separated list of node IDs to simulate
     #[arg(
         long,
-        default_value = "A,B,C,D,E,F,G,H,I,J,K,L,M",
+        default_value = "A,B,C,D,E,F,G,H,I,J,K,L,M,N,O",
         value_delimiter = ','
     )]
     nodes: Vec<String>,
     /// Interval (ms) between infections
-    #[arg(long, default_value_t = 500)]
+    #[arg(long, default_value_t = 1000)]
     step_ms: u64,
 }
 
-struct UiState {
+struct State {
     nodes: Vec<String>,
     infected: HashSet<String>,
 }
 
-impl UiState {
+impl State {
     fn percent(&self) -> f64 {
         if self.nodes.is_empty() {
             0.0
@@ -66,16 +55,16 @@ async fn main() -> anyhow::Result<()> {
     spawn(opts.nodes.clone(), opts.step_ms, tx);
 
     // Run the TUI (blocks until 'q')
-    run_tui(opts.nodes, rx)?;
+    run(opts.nodes, rx)?;
     Ok(())
 }
 
 // TODO: replace this with real gossip-core events
 fn spawn(mut nodes: Vec<String>, step_ms: u64, tx: UnboundedSender<GossipEvent>) {
-    use rand::thread_rng;
+    use rand::rng;
 
     // shuffle before the async block (ThreadRng is !Send)
-    nodes.shuffle(&mut thread_rng());
+    nodes.shuffle(&mut rng());
 
     tokio::spawn(async move {
         while !nodes.is_empty() {
@@ -90,14 +79,11 @@ fn spawn(mut nodes: Vec<String>, step_ms: u64, tx: UnboundedSender<GossipEvent>)
                     node_id: id.clone(),
                 });
             }
-
-            // simple log (shows in VS Code terminal once you exit alt-screen)
-            // eprintln!("Infecting {:?}", batch);
         }
     });
 }
 
-fn run_tui(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io::Result<()> {
+fn run(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io::Result<()> {
     // Set up terminal
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -105,15 +91,16 @@ fn run_tui(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io:
     let backend = CrosstermBackend::new(stdout);
     let mut terminal: Terminal<CrosstermBackend<io::Stdout>> = Terminal::new(backend)?;
 
-    let mut state = UiState {
+    let mut state = State {
         nodes: node_ids,
         infected: HashSet::new(),
     };
     let tick_rate = Duration::from_millis(60);
     let mut last_tick = Instant::now();
 
+    state.infected.insert(state.nodes[0].clone());
+
     loop {
-        // keyboard quit
         if event::poll(Duration::from_millis(30))? {
             if let CEvent::Key(key) = event::read()? {
                 if key.code == KeyCode::Char('q') {
@@ -124,9 +111,8 @@ fn run_tui(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io:
 
         // apply incoming events
         while let Ok(ev) = rx.try_recv() {
-            if let GossipEvent::RumorReceived { node_id } = ev {
-                state.infected.insert(node_id);
-            }
+            let GossipEvent::RumorReceived { node_id } = ev;
+            state.infected.insert(node_id);
         }
 
         if last_tick.elapsed() >= tick_rate {
@@ -135,7 +121,6 @@ fn run_tui(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io:
         }
     }
 
-    // cleanup
     crossterm::terminal::disable_raw_mode()?;
     crossterm::execute!(
         terminal.backend_mut(),
@@ -145,17 +130,11 @@ fn run_tui(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io:
     Ok(())
 }
 
-fn draw_ui(f: &mut ratatui::Frame, st: &UiState) {
+fn draw_ui(f: &mut ratatui::Frame, st: &State) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(5)])
-        .split(f.size());
-
-    // Footer with hint
-    let header = Paragraph::new("Press 'q' to quit ")
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
-    f.render_widget(header, chunks[1]);
+        .constraints([Constraint::Length(5), Constraint::Min(5)])
+        .split(f.area());
 
     // progress bar
     let gauge = Gauge::default()
@@ -169,19 +148,33 @@ fn draw_ui(f: &mut ratatui::Frame, st: &UiState) {
     f.render_widget(gauge, chunks[0]);
 
     use std::f64::consts::PI;
+
     let canvas = Canvas::default()
         .block(Block::default().borders(Borders::ALL).title(" Nodes "))
         .x_bounds([-1.2, 1.2])
         .y_bounds([-1.2, 1.2])
         .paint(|ctx| {
-            let n = st.nodes.len().max(1);
+            let n = st.nodes.len().max(1) as f64;
+            let label_offset = 0.20;
+
             for (i, id) in st.nodes.iter().enumerate() {
-                let ang = 2.0 * PI * i as f64 / n as f64;
+                let ang = PI + (2.0 * PI) * (i as f64 / n);
                 let (x, y) = (ang.cos(), ang.sin());
                 let infected = st.infected.contains(id);
-                let color = if infected { Color::Red } else { Color::Gray };
-                let node = "●";
+                let color = if infected || id == "A" {
+                    Color::Green
+                } else {
+                    Color::DarkGray
+                };
+
+                let node = "⬤";
                 ctx.print(x, y, Span::styled(node, Style::default().fg(color)));
+
+                ctx.print(
+                    x,
+                    y + label_offset,
+                    Span::styled(id.clone(), Style::default().fg(Color::White)),
+                );
             }
         });
     f.render_widget(canvas, chunks[1]);
