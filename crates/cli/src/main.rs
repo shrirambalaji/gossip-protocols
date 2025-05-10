@@ -11,11 +11,17 @@ use ratatui::text::Span;
 use ratatui::widgets::canvas::Canvas;
 use ratatui::widgets::{Block, Borders, Gauge};
 use ratatui::{Terminal, backend::CrosstermBackend};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone)]
 enum GossipEvent {
     RumorReceived { node_id: String },
+}
+
+#[derive(Debug, Clone)]
+enum Event {
+    Step,
+    Gossip(GossipEvent),
 }
 
 #[derive(Parser, Debug)]
@@ -26,6 +32,10 @@ struct Opts {
         value_delimiter = ','
     )]
     nodes: Vec<String>,
+
+    #[arg(long = "break", default_value_t = false)]
+    break_mode: bool,
+
     /// Interval (ms) between infections
     #[arg(long, default_value_t = 1000)]
     step_ms: u64,
@@ -49,42 +59,56 @@ impl State {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
-    let (tx, rx) = unbounded_channel();
+    let (tx, _rx) = broadcast::channel(16);
 
-    // Spawn mock infection generator
-    spawn(opts.nodes.clone(), opts.step_ms, tx);
+    spawn(
+        opts.nodes.clone(),
+        opts.step_ms,
+        tx.clone(),
+        opts.break_mode,
+    );
 
-    // Run the TUI (blocks until 'q')
-    run(opts.nodes, rx)?;
+    run(opts.nodes, tx.clone(), opts.break_mode)?;
     Ok(())
 }
 
 // TODO: replace this with real gossip-core events
-fn spawn(mut nodes: Vec<String>, step_ms: u64, tx: UnboundedSender<GossipEvent>) {
+fn spawn(mut nodes: Vec<String>, step_ms: u64, tx: broadcast::Sender<Event>, break_mode: bool) {
     use rand::rng;
 
     // shuffle before the async block (ThreadRng is !Send)
     nodes.shuffle(&mut rng());
+    let mut rx = tx.subscribe();
 
     tokio::spawn(async move {
         while !nodes.is_empty() {
-            tokio::time::sleep(Duration::from_millis(step_ms)).await;
-
+            if break_mode {
+                loop {
+                    match rx.recv().await {
+                        Ok(Event::Step) => break,
+                        Ok(_) => continue,
+                        Err(_) => {
+                            return;
+                        }
+                    }
+                }
+            } else {
+                tokio::time::sleep(Duration::from_millis(step_ms)).await;
+            }
             // take up to 3 nodes each round
             let batch: Vec<String> = (0..3).filter_map(|_| nodes.pop()).collect();
 
             // send an event per node
             for id in &batch {
-                let _ = tx.send(GossipEvent::RumorReceived {
-                    node_id: id.clone(),
-                });
+                let _ = tx.send(Event::Gossip(GossipEvent::RumorReceived {
+                    node_id: id.to_string(),
+                }));
             }
         }
     });
 }
 
-fn run(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io::Result<()> {
-    // Set up terminal
+fn run(node_ids: Vec<String>, tx: broadcast::Sender<Event>, break_mode: bool) -> io::Result<()> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -98,21 +122,28 @@ fn run(node_ids: Vec<String>, mut rx: UnboundedReceiver<GossipEvent>) -> io::Res
     let tick_rate = Duration::from_millis(60);
     let mut last_tick = Instant::now();
 
+    let mut rx = tx.subscribe();
+
     state.infected.insert(state.nodes[0].clone());
 
     loop {
         if event::poll(Duration::from_millis(30))? {
             if let CEvent::Key(key) = event::read()? {
-                if key.code == KeyCode::Char('q') {
-                    break;
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Char('p') | KeyCode::Char(' ') if break_mode => {
+                        let _ = tx.send(Event::Step);
+                    }
+                    _ => {}
                 }
             }
         }
 
         // apply incoming events
         while let Ok(ev) = rx.try_recv() {
-            let GossipEvent::RumorReceived { node_id } = ev;
-            state.infected.insert(node_id);
+            if let Event::Gossip(GossipEvent::RumorReceived { node_id }) = ev {
+                state.infected.insert(node_id);
+            }
         }
 
         if last_tick.elapsed() >= tick_rate {
@@ -136,7 +167,6 @@ fn draw_ui(f: &mut ratatui::Frame, st: &State) {
         .constraints([Constraint::Length(5), Constraint::Min(5)])
         .split(f.area());
 
-    // progress bar
     let gauge = Gauge::default()
         .block(
             Block::default()
