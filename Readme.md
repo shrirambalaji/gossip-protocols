@@ -1,5 +1,5 @@
 # Gossip Protocols
 
-We will be implementing a node, then a push and then a push-pull based system.
-
-# Maelstrom & Jepsen
+```sh
+./bin/maelstrom test -w broadcast --bin ./target/debug/gossip --node-count 2 --time-limit 20 --rate 10 --log-stderr
+```
