@@ -14,7 +14,7 @@ pub struct GossipNode {
 #[derive(Clone, Default)]
 pub struct NodeState {
     seen: HashSet<u64>,
-    peers: Vec<String>,
+    neighbours: Vec<String>,
 }
 
 #[async_trait]
@@ -38,9 +38,9 @@ impl MaelstromNode for GossipNode {
                 return runtime.reply_ok(req).await;
             }
             Ok(Request::Topology { topology }) => {
-                let peers = topology.get(runtime.node_id()).unwrap();
-                self.state.lock().unwrap().peers = peers.clone();
-                info!("My peers are {:?}", peers);
+                let neighbours = topology.get(runtime.node_id()).unwrap();
+                self.state.lock().unwrap().neighbours = neighbours.clone();
+                info!("My neighbours are {:?}", neighbours);
                 return runtime.reply_ok(req).await;
             }
             _ => done(runtime, req),
