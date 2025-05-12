@@ -10,3 +10,6 @@ log = "0.4.27"
 maelstrom-node = "0.1.6"
 serde = "1.0.219"
 tokio = { version = "1" }
+
+[patch.crates-io]
+maelstrom-node = { path = "crates/maelstrom-node" }

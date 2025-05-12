@@ -10,3 +10,4 @@ target/
 *.pdb
 
 store
+.DS_Store

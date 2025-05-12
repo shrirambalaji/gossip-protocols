@@ -1,3 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+
+[patch.crates-io]
+maelstrom-node = { path = "crates/maelstrom-node" }

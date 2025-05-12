@@ -646,8 +646,6 @@ dependencies = [
 [[package]]
 name = "maelstrom-node"
 version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f5c71562438987c4386067f65426150b918f2e000c7c851256ec8adea01b516"
 dependencies = [
  "async-trait",
  "env_logger",

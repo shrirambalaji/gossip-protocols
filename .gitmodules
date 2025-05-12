@@ -1,0 +1,3 @@
+[submodule "crates/maelstrom-node"]
+	path = crates/maelstrom-node
+	url = https://github.com/shrirambalaji/maelstrom-node

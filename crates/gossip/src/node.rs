@@ -31,7 +31,7 @@ impl MaelstromNode for GossipNode {
                 if self.try_add(element) {
                     info!("messages now {}", element);
                     for node in runtime.neighbours() {
-                        runtime.call_async(node, Request::Broadcast { message: element });
+                        runtime.execute_rpc(node, Request::Broadcast { message: element });
                     }
                 }
 
