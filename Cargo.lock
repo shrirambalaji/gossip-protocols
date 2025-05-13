@@ -200,8 +200,11 @@ dependencies = [
  "anyhow",
  "clap",
  "crossterm 0.29.0",
+ "gossip",
  "rand",
  "ratatui",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
