@@ -15,3 +15,6 @@ tokio = { version = "1.45.0", features = [
     "sync",
     "time",
 ] }
+gossip = { path = "../gossip" }
+serde = { version = "1.0.159", features = ["derive"] }
+serde_json = "1.0.95"

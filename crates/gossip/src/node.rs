@@ -8,13 +8,23 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
 pub struct GossipNode {
-    state: Arc<Mutex<NodeState>>,
+    pub state: Arc<Mutex<NodeState>>,
+}
+impl GossipNode {
+    pub fn new(neighbours: Vec<String>) -> Self {
+        GossipNode {
+            state: Arc::new(Mutex::new(NodeState {
+                seen: HashSet::new(),
+                neighbours,
+            })),
+        }
+    }
 }
 
 #[derive(Clone, Default)]
 pub struct NodeState {
-    seen: HashSet<u64>,
-    neighbours: Vec<String>,
+    pub seen: HashSet<u64>,
+    pub neighbours: Vec<String>,
 }
 
 #[async_trait]
