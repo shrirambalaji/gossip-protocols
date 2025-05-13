@@ -2,7 +2,7 @@ use crate::request::Request;
 use async_trait::async_trait;
 use log::info;
 use maelstrom::protocol::Message;
-use maelstrom::{Node as MaelstromNode, Result, Runtime, done};
+use maelstrom::{Node as MaelstromNode, Result, Runtime};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -43,7 +43,7 @@ impl MaelstromNode for GossipNode {
                 info!("My neighbours are {:?}", neighbours);
                 return runtime.reply_ok(req).await;
             }
-            _ => done(runtime, req),
+            _ => runtime.exit(req),
         }
     }
 }
