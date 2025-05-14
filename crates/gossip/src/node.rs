@@ -3,8 +3,13 @@ use async_trait::async_trait;
 use log::info;
 use maelstrom::protocol::Message;
 use maelstrom::{Node as MaelstromNode, Result, Runtime};
+use rand::rng;
+use rand::seq::SliceRandom;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+
+/// The number of random peers to select for gossiping.
+const RANDOM_PEER_COUNT: usize = 3;
 
 #[derive(Clone, Default)]
 pub struct GossipNode {
@@ -37,10 +42,21 @@ impl MaelstromNode for GossipNode {
                 let msg = Request::ReadOk { messages: data };
                 return runtime.reply(req, msg).await;
             }
+
+            // Each request to a `broadcast` is a round.
+            // A broadcast typically fans out a request to every N neighbours.
+            // Here we are using a random sample of 3 neighbours.
             Ok(Request::Broadcast { message: element }) => {
                 if self.try_add(element) {
                     info!("messages now {}", element);
-                    for node in runtime.neighbours() {
+
+                    let mut neighbours = {
+                        let st = self.state.lock().unwrap();
+                        st.neighbours.clone()
+                    };
+                    neighbours.shuffle(&mut rng());
+
+                    for node in neighbours.into_iter().take(RANDOM_PEER_COUNT) {
                         runtime.execute_rpc(node, Request::Broadcast { message: element });
                     }
                 }
