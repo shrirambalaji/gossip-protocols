@@ -8,8 +8,6 @@ anyhow = "1.0.98"
 async-trait = "0.1.88"
 log = "0.4.27"
 maelstrom-node = "0.1.6"
+rand = "0.9.1"
 serde = "1.0.219"
 tokio = { version = "1" }
-
-[patch.crates-io]
-maelstrom-node = { path = "crates/maelstrom-node" }

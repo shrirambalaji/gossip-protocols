@@ -507,6 +507,7 @@ dependencies = [
  "async-trait",
  "log",
  "maelstrom-node",
+ "rand",
  "serde",
  "tokio",
 ]

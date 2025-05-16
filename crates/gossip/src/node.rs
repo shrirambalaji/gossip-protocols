@@ -48,12 +48,8 @@ impl MaelstromNode for GossipNode {
             // Here we are using a random sample of 3 neighbours.
             Ok(Request::Broadcast { message: element }) => {
                 if self.try_add(element) {
-                    info!("messages now {}", element);
-
-                    let mut neighbours = {
-                        let st = self.state.lock().unwrap();
-                        st.neighbours.clone()
-                    };
+                    let state = self.state.lock().unwrap();
+                    let mut neighbours = state.neighbours.clone();
                     neighbours.shuffle(&mut rng());
 
                     for node in neighbours.into_iter().take(RANDOM_PEER_COUNT) {
@@ -61,6 +57,7 @@ impl MaelstromNode for GossipNode {
                     }
                 }
 
+                // We simply return an empty Ok response.
                 return runtime.reply_ok(req).await;
             }
             Ok(Request::Topology { topology }) => {
