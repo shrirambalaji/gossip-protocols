@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use log::info;
 use maelstrom::protocol::Message;
 use maelstrom::{Node as MaelstromNode, Result, Runtime};
-use rand::rng;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -16,13 +15,14 @@ const RANDOM_PEER_COUNT: usize = 3;
 pub struct GossipNode {
     pub state: Arc<Mutex<NodeState>>,
 }
+
 impl GossipNode {
     pub fn new(neighbours: Vec<String>) -> Self {
         GossipNode {
             state: Arc::new(Mutex::new(NodeState {
                 seen: HashSet::new(),
                 neighbours,
-                pending: HashMap::new(),
+                unacked: HashMap::new(),
             })),
         }
     }
@@ -32,7 +32,7 @@ impl GossipNode {
 pub struct NodeState {
     pub seen: HashSet<u64>,
     pub neighbours: Vec<String>,
-    pub pending: HashMap<u64, HashSet<String>>, // NEW: message -> unacked peers
+    pub unacked: HashMap<u64, HashSet<String>>,
 }
 
 #[async_trait]
@@ -46,19 +46,20 @@ impl MaelstromNode for GossipNode {
                 return runtime.reply(req, msg).await;
             }
             Ok(Request::Broadcast { message }) => {
-                let sender = req.src.clone();
-                let mut should_retry = false;
+                let sender: String = req.src.clone();
                 if self.try_add(message) {
-                    let mut st = self.state.lock().unwrap();
-                    let mut unacked: HashSet<String> = st.neighbours.iter().cloned().collect();
-                    unacked.remove(&sender);
-                    st.pending.insert(message, unacked.clone());
-                    should_retry = true;
-                }
-                runtime.reply_ok(req).await?;
-                if should_retry {
+                    let mut state = self.state.lock().unwrap();
+
+                    // before we send a message we move it to unacked
+                    let mut neighbours: HashSet<String> =
+                        state.neighbours.iter().cloned().collect();
+                    neighbours.remove(&sender);
+
+                    // unacked state used to actually send a message to those nodes
+                    state.unacked.insert(message, neighbours.clone());
                     self.retry(runtime.clone(), message);
                 }
+                runtime.reply_ok(req).await?;
                 return Ok(());
             }
             Ok(Request::Topology { topology }) => {
@@ -75,23 +76,34 @@ impl MaelstromNode for GossipNode {
 impl GossipNode {
     fn retry(&self, runtime: Runtime, msg: u64) {
         let node = self.clone();
+
+        // why is the background task necessary?
+        // because we need to retry sending the message until all neighbours have acknowledged it.
+        // if we don't do this, we will not be able to send the message to all neighbours.
         tokio::spawn(async move {
             loop {
                 {
-                    let st = node.state.lock().unwrap();
-                    if st.pending.get(&msg).map_or(true, |un| un.is_empty()) {
+                    let state = node.state.lock().unwrap();
+                    if state.unacked.get(&msg).map_or(true, |un| un.is_empty()) {
                         break;
                     }
-                    let targets: Vec<String> =
-                        st.pending.get(&msg).unwrap().iter().cloned().collect();
-                    drop(st);
-                    for dest in targets {
-                        runtime.execute_rpc(dest, Request::Broadcast { message: msg });
+
+                    // we have unacked messages, so we will retry
+                    let mut neighbours: Vec<String> =
+                        state.unacked.get(&msg).unwrap().iter().cloned().collect();
+
+                    let mut rng = rand::rng();
+                    neighbours.shuffle(&mut rng);
+
+                    for neighbour in neighbours.into_iter().take(RANDOM_PEER_COUNT) {
+                        runtime.execute_rpc(neighbour, Request::Broadcast { message: msg });
                     }
                 }
+
+                // we run this background loop every 1 second.
                 sleep(Duration::from_secs(1)).await;
             }
-            node.state.lock().unwrap().pending.remove(&msg);
+            node.state.lock().unwrap().unacked.remove(&msg);
         });
     }
 
