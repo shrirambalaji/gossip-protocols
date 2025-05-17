@@ -30,8 +30,13 @@ impl GossipNode {
 
 #[derive(Clone, Default)]
 pub struct NodeState {
+    // a list of all the seen MessageIds
     pub seen: HashSet<u64>,
+
+    // all the neighbours to a node
     pub neighbours: Vec<String>,
+
+    // a map of a messageId, and a unique set of neighbours who have not acknowleded it.
     pub unacked: HashMap<u64, HashSet<String>>,
 }
 
@@ -92,6 +97,7 @@ impl GossipNode {
                     let mut neighbours: Vec<String> =
                         state.unacked.get(&msg).unwrap().iter().cloned().collect();
 
+                    // a per-thread random number generator to shuffle the order of neighbours randomly
                     let mut rng = rand::rng();
                     neighbours.shuffle(&mut rng);
 
