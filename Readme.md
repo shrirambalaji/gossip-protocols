@@ -1,6 +1,6 @@
 # Gossip Protocols
 
-![image](https://github.com/user-attachments/assets/2c20c9d1-cdbe-4472-87c6-df9483c8ff52)
+![image](https://github.com/user-attachments/assets/d4373f50-91d3-40e9-a7c2-74c2af5d032a)
 
 
 This is an implementation of a simple Gossip Protocol which works with [Maelstrom](https://github.com/jepsen-io/maelstrom), and was part of the demo at my talk at [Rootconf 2025 on Gossip Protocols](https://hasgeek.com/rootconf/2025/schedule/rumor-has-it-understanding-gossip-protocols-for-eventual-consistency-2hXBN5TtaPhwWDNG3gtY2E)
