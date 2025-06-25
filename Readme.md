@@ -12,20 +12,52 @@ This is an implementation of a simple Gossip Protocol which works with [Maelstro
 
 ## Setup 
 
+First, initialize and pull in the required submodules:
+
+```sh
+git submodule update --init
+```
+
+### Prerequisites
+
+**Windows users:** Install Java 11 using winget:
+```powershell
+winget install Microsoft.OpenJDK.11
+```
+
+**Note for Windows:** Maelstrom requires the ability to create symbolic links. Either:
+- Run PowerShell as Administrator, OR
+- Enable Developer Mode in Windows Settings → Update & Security → For developers
+
+Then build the project:
+
 ```sh
 cargo run build
 ```
 
 ## Running the Maelstrom Test
 
+**Linux/macOS:**
+
 ```sh
 ./bin/maelstrom test -w broadcast --bin ./target/debug/gossip --node-count 10 --time-limit 20 --rate 10 --log-stderr
+```
+
+**Windows (PowerShell):**
+```powershell
+.\bin\maelstrom.ps1 test -w broadcast --bin .\target\debug\gossip.exe --node-count 10 --time-limit 20 --rate 10 --log-stderr
 ```
 
 ## Simulating a network partition
 
 Maelstrom has a `--nemesis` flag, that allows introducing network partitions. This tests the `retry` workflow in our `GossipNode` implementation:
 
+**Linux/macOS:**
 ```sh
 ./bin/maelstrom test -w broadcast --bin ./target/debug/gossip --node-count 10 --time-limit 20 --rate 10 --log-stderr --nemesis partition
+```
+
+**Windows (PowerShell):**
+```powershell
+.\bin\maelstrom.ps1 test -w broadcast --bin .\target\debug\gossip.exe --node-count 10 --time-limit 20 --rate 10 --log-stderr --nemesis partition
 ```
