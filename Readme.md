@@ -38,6 +38,7 @@ cargo run build
 ## Running the Maelstrom Test
 
 **Linux/macOS:**
+
 ```sh
 ./bin/maelstrom test -w broadcast --bin ./target/debug/gossip --node-count 10 --time-limit 20 --rate 10 --log-stderr
 ```
